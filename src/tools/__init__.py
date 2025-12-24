@@ -1,1 +1,1 @@
-# BoltzGen tools module
+"""BoltzGen MCP tools."""

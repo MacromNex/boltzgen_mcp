@@ -1,0 +1,28 @@
+{
+  "_description": "Configuration for protein binder design",
+  "_source": "Extracted from examples/use_case_1_protein_binder_design.py",
+
+  "protocol": "protein-anything",
+  "num_designs": 10,
+  "budget": 2,
+
+  "distributed": {
+    "master_port": 29500
+  },
+
+  "compute": {
+    "cuda_device": null,
+    "verbose": true
+  },
+
+  "output": {
+    "format": ["cif", "pdb"],
+    "include_intermediates": true
+  },
+
+  "design_parameters": {
+    "description": "Protocol protein-anything is the default for general protein binder design",
+    "target_types": ["protein"],
+    "design_length": "130..140 residues"
+  }
+}

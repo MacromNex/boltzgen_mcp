@@ -1,0 +1,33 @@
+{
+  "_description": "Default configuration for all BoltzGen MCP tools",
+  "_usage": "This config is used as fallback when no specific config is provided",
+
+  "protocol": "protein-anything",
+  "num_designs": 10,
+  "budget": 2,
+  "alpha": null,
+
+  "distributed": {
+    "master_addr": "127.0.0.1",
+    "master_port": 29500,
+    "gloo_socket_ifname": "lo",
+    "nccl_socket_family": "AF_INET",
+    "nccl_socket_ifname": "lo"
+  },
+
+  "compute": {
+    "cuda_device": null,
+    "python_warnings": "ignore"
+  },
+
+  "output": {
+    "format": ["cif", "pdb"],
+    "include_metadata": true,
+    "include_intermediates": true
+  },
+
+  "logging": {
+    "verbose": true,
+    "stream_output": true
+  }
+}

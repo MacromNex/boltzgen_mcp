@@ -1,0 +1,35 @@
+{
+  "_description": "Configuration for peptide binder design",
+  "_source": "Extracted from examples/use_case_2_peptide_binder_design.py",
+
+  "protocol": "peptide-anything",
+  "num_designs": 10,
+  "budget": 2,
+  "alpha": 0.01,
+
+  "distributed": {
+    "master_port": 29500
+  },
+
+  "compute": {
+    "cuda_device": null,
+    "verbose": true
+  },
+
+  "output": {
+    "format": ["cif", "pdb"],
+    "include_intermediates": true
+  },
+
+  "design_parameters": {
+    "description": "Protocol peptide-anything is specialized for peptide binder design",
+    "target_types": ["protein"],
+    "design_length": "12..20 residues",
+    "features": [
+      "cysteine_filtering_by_default",
+      "peptide_optimized_diversity",
+      "linear_and_cyclic_peptide_support"
+    ],
+    "diversity_control": "alpha parameter controls diversity vs quality tradeoff (0.0=quality only, 1.0=diversity only)"
+  }
+}
