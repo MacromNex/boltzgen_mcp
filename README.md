@@ -688,5 +688,5 @@ This MCP server wraps BoltzGen, which has its own license terms. Please refer to
 
 ## Credits
 
-Based on [BoltzGen](https://github.com/deepmind/boltzgen) by DeepMind for AI-powered protein design.
+Based on [BoltzGen](https://github.com/HannesStark/boltzgen) by Hannes Stark et al. for AI-powered protein design.
 MCP integration built using [FastMCP](https://github.com/jlowin/fastmcp) framework.
