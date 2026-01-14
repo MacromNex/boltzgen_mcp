@@ -95,15 +95,15 @@ python scripts/run_boltzgen.py --config example/nanobody/penguinpox.yaml --outpu
 ```shell
 cd tool-mcps/boltzgen_mcp
 mamba activate ./env
-fastmcp run src/boltzgen_mcp.py:mcp --transport http --port 8001 --python ./env/bin/python 
+fastmcp run src/server.py:mcp --transport http --port 8001 --python ./env/bin/python 
 # Test config path: /home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/example/nanobody/penguinpox.yaml
 # Test output dir: /home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/results/nanobody_penguinpox_mcp
 ```
 
 ### Install MCP server
 ```shell
-fastmcp install claude-code tool-mcps/boltzgen_mcp/src/boltzgen_mcp.py --python tool-mcps/boltzgen_mcp/env/bin/python
-fastmcp install gemini-cli tool-mcps/boltzgen_mcp/src/boltzgen_mcp.py --python tool-mcps/boltzgen_mcp/env/bin/python
+fastmcp install claude-code tool-mcps/boltzgen_mcp/src/server.py --python tool-mcps/boltzgen_mcp/env/bin/python
+fastmcp install gemini-cli tool-mcps/boltzgen_mcp/src/server.py --python tool-mcps/boltzgen_mcp/env/bin/python
 ```
 ### Call MCP service
 1. Execute a binder design job give a target pdb structure

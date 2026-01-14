@@ -3,11 +3,15 @@ BoltzGen protein design tools.
 
 This MCP Server provides tools for designing proteins using BoltzGen:
 1. boltzgen_run: Run full BoltzGen protein design pipeline (synchronous)
-2. boltzgen_submit: Submit a BoltzGen job asynchronously (returns immediately)
+2. boltzgen_submit: Submit a BoltzGen job to the queue (FIFO with GPU scheduling)
 3. boltzgen_check_status: Check status and results of a submitted job
+4. boltzgen_queue_status: Check queue status, running jobs, and GPU availability
+5. boltzgen_cancel_job: Cancel a queued or running job
+6. boltzgen_configure_queue: Configure max workers and GPU settings
 
 The tools use:
 - BoltzGen for protein structure generation and optimization
+- FIFO job queue with automatic GPU assignment
 """
 
 import json
@@ -17,10 +21,21 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, List
 
 from fastmcp import FastMCP
 from loguru import logger
+
+# Import queue functions
+from jobs import (
+    queue_job,
+    get_queue_status,
+    get_queued_job_status,
+    cancel_queued_job,
+    configure_queue,
+    get_job_queue,
+    get_resource_status,
+)
 
 # MCP server instance
 boltzgen_design_mcp = FastMCP(name="boltzgen_design")
@@ -291,21 +306,22 @@ def boltzgen_submit(
     ] = "protein-anything",
     num_designs: Annotated[int, "Number of designs to generate"] = 10,
     budget: Annotated[int, "Budget parameter for BoltzGen"] = 2,
-    cuda_device: Annotated[Optional[str], "CUDA device ID (e.g., '0' or '1')"] = None,
 ) -> dict:
     """
-    Submit a BoltzGen protein design job asynchronously.
+    Submit a BoltzGen protein design job to the queue.
 
-    This tool submits a BoltzGen job and returns immediately with a 'submitted' status.
-    The job runs in the background and results can be queried using boltzgen_check_status.
+    Jobs are processed in FIFO order with automatic GPU assignment.
+    Multiple jobs can run in parallel if multiple GPUs are configured.
+    Default: 1 job at a time (configurable via boltzgen_configure_queue).
 
     The tool will:
     1. Validate inputs and configuration file
-    2. Launch the BoltzGen process in the background
-    3. Return immediately with submission status and output directory
-    4. Job continues running independently
+    2. Add job to the queue
+    3. Return immediately with job_id and queue position
+    4. Queue worker starts job when GPU is available
 
-    Use boltzgen_check_status with the returned output_dir to monitor progress.
+    Use boltzgen_check_status with output_dir or job_id to monitor progress.
+    Use boltzgen_queue_status to see overall queue state.
 
     Available Protocols:
     - protein-anything: General protein binder design (default)
@@ -320,9 +336,10 @@ def boltzgen_submit(
     - protocol: BoltzGen protocol to use (see Available Protocols above)
     - num_designs: Number of protein designs to generate
     - budget: Computational budget parameter
-    - cuda_device: Optional GPU device ID (e.g., '0', '1')
 
-    Output: Dictionary with status='submitted', output_dir, and job info
+    Note: GPU is automatically assigned from the pool. No need to specify cuda_device.
+
+    Output: Dictionary with status='queued', job_id, queue position, and output_dir
     """
     logger.info(f"boltzgen_submit called with config={config}, output={output}")
 
@@ -349,86 +366,44 @@ def boltzgen_submit(
         output_dir = Path(output)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save job info
-        job_info = {
-            "config": config,
-            "output_dir": str(output_dir),
-            "protocol": protocol,
-            "num_designs": num_designs,
-            "budget": budget,
-            "cuda_device": cuda_device,
-            "submitted_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        job_info_path = output_dir / "job_info.json"
-        with open(job_info_path, 'w') as f:
-            json.dump(job_info, f, indent=2)
-
         logger.info(f"Config: {config}")
         logger.info(f"Output directory: {output_dir}")
         logger.info(f"Protocol: {protocol}")
 
-        # Build command using the run_boltzgen.py script
-        cmd = [
-            sys.executable,
-            str(scripts_path / "run_boltzgen.py"),
-            "--config", config,
-            "--output", str(output_dir),
-            "--protocol", protocol,
-            "--num_designs", str(num_designs),
-            "--budget", str(budget),
-        ]
+        # Build args for the queue
+        args = {
+            "config": config,
+            "output": str(output_dir),
+            "protocol": protocol,
+            "num_designs": num_designs,
+            "budget": budget,
+        }
 
-        if cuda_device is not None:
-            cmd.extend(["--cuda_device", cuda_device])
-
-        # Setup environment
-        run_env = os.environ.copy()
-        if cuda_device is not None:
-            run_env["CUDA_VISIBLE_DEVICES"] = cuda_device
-        run_env["PYTHONUNBUFFERED"] = "1"
-
-        # Create log file for the background process
-        log_file = output_dir / "boltzgen_run.log"
-
-        logger.info(f"Submitting BoltzGen job" + (f" on GPU {cuda_device}" if cuda_device else ""))
-        logger.debug(f"Command: {' '.join(cmd)}")
-        logger.info(f"Log file: {log_file}")
-
-        # Launch process in background
-        with open(log_file, 'w') as log_f:
-            process = subprocess.Popen(
-                cmd,
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
-                env=run_env,
-                cwd=str(scripts_path),
-                start_new_session=True,  # Detach from parent
-            )
+        # Submit to queue
+        script_path = str(scripts_path / "run_boltzgen.py")
+        result = queue_job(
+            script_path=script_path,
+            args=args,
+            output_dir=str(output_dir),
+            job_name=f"boltzgen_{protocol}_{Path(config).stem}"
+        )
 
         logger.info(f"=" * 80)
-        logger.info(f"Job submitted successfully. PID: {process.pid}")
+        logger.info(f"Job {result['job_id']} added to queue at position {result['position']}")
         logger.info(f"OUTPUT DIRECTORY: {output_dir}")
-        logger.info(f"LOG FILE: {log_file}")
         logger.info(f"=" * 80)
-
-        # Update job info with PID
-        job_info["pid"] = process.pid
-        with open(job_info_path, 'w') as f:
-            json.dump(job_info, f, indent=2)
 
         return {
-            "status": "submitted",
-            "message": "BoltzGen job submitted successfully. Use boltzgen_check_status to monitor progress.",
+            "status": result["status"],
+            "job_id": result["job_id"],
+            "queue_position": result["position"],
+            "queue_length": result["queue_length"],
+            "message": f"Job queued at position {result['position']}. Use boltzgen_check_status or boltzgen_queue_status to monitor.",
             "output_dir": str(output_dir),
             "config": config,
             "protocol": protocol,
             "num_designs": num_designs,
             "budget": budget,
-            "cuda_device": cuda_device,
-            "log_file": str(log_file),
-            "job_info_file": str(job_info_path),
-            "pid": process.pid,
         }
 
     except Exception as e:
@@ -656,3 +631,179 @@ def _generate_job_summary(
         summary["log_tail"] = log_tail
 
     return summary
+
+
+@boltzgen_design_mcp.tool
+def boltzgen_queue_status() -> dict:
+    """
+    Get the current status of the job queue.
+
+    Returns information about:
+    - Number of jobs waiting in queue
+    - Currently running jobs and their GPU assignments
+    - Available GPUs
+    - Queue configuration (max_workers, total GPUs)
+
+    Use this to monitor overall system status and plan job submissions.
+
+    Output: Dictionary with queue statistics and job lists
+    """
+    logger.info("boltzgen_queue_status called")
+
+    try:
+        result = get_queue_status()
+
+        logger.info(f"Queue status: {result['queue_length']} queued, {result['running_count']} running")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Exception getting queue status: {e}")
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }
+
+
+@boltzgen_design_mcp.tool
+def boltzgen_cancel_job(
+    job_id: Annotated[str, "Job ID to cancel (from boltzgen_submit response)"],
+) -> dict:
+    """
+    Cancel a queued or running job.
+
+    If the job is queued, it will be removed from the queue.
+    If the job is running, the process will be terminated and GPU released.
+
+    Parameters:
+    - job_id: The job ID returned from boltzgen_submit
+
+    Output: Dictionary with cancellation result
+    """
+    logger.info(f"boltzgen_cancel_job called for job_id={job_id}")
+
+    try:
+        result = cancel_queued_job(job_id)
+
+        logger.info(f"Cancel result: {result}")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Exception cancelling job: {e}")
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }
+
+
+@boltzgen_design_mcp.tool
+def boltzgen_configure_queue(
+    max_workers: Annotated[Optional[int], "Maximum concurrent jobs (default: 1)"] = None,
+    gpu_ids: Annotated[Optional[str], "Comma-separated GPU IDs (e.g., '0,1')"] = None,
+) -> dict:
+    """
+    Configure the job queue settings.
+
+    Allows changing:
+    - max_workers: How many jobs can run in parallel (limited by GPU count)
+    - gpu_ids: Which GPUs to use for job execution
+
+    Note: Changing these settings will reinitialize the queue.
+    Running jobs will continue, but queued jobs may be affected.
+
+    Parameters:
+    - max_workers: Maximum concurrent jobs. Set to number of GPUs for full parallelism.
+    - gpu_ids: Comma-separated list of GPU IDs (e.g., "0,1" for two GPUs)
+
+    Output: Dictionary with new queue configuration
+    """
+    logger.info(f"boltzgen_configure_queue called: max_workers={max_workers}, gpu_ids={gpu_ids}")
+
+    try:
+        # Parse gpu_ids if provided
+        gpu_list = None
+        if gpu_ids:
+            gpu_list = [g.strip() for g in gpu_ids.split(",")]
+
+        result = configure_queue(max_workers=max_workers, gpu_ids=gpu_list)
+
+        logger.info(f"Queue configured: max_workers={result['max_workers']}, gpus={result['gpu_ids']}")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Exception configuring queue: {e}")
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }
+
+
+@boltzgen_design_mcp.tool
+def boltzgen_job_status(
+    job_id: Annotated[str, "Job ID to check (from boltzgen_submit response)"],
+) -> dict:
+    """
+    Get the status of a specific queued job by job_id.
+
+    This is useful when you have the job_id but not the output_dir.
+    For checking status by output_dir, use boltzgen_check_status instead.
+
+    Parameters:
+    - job_id: The job ID returned from boltzgen_submit
+
+    Output: Dictionary with job status, queue position, and details
+    """
+    logger.info(f"boltzgen_job_status called for job_id={job_id}")
+
+    try:
+        result = get_queued_job_status(job_id)
+
+        logger.info(f"Job {job_id} status: {result.get('job_status', 'unknown')}")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Exception getting job status: {e}")
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }
+
+
+@boltzgen_design_mcp.tool
+def boltzgen_resource_status() -> dict:
+    """
+    Check resource usage and verify GPUs are freed when idle.
+
+    Use this tool to confirm that:
+    - When no jobs are running, all GPUs are available for other programs
+    - The MCP server is not holding GPU/CPU/memory resources unnecessarily
+
+    The MCP server itself does NOT use GPU memory. GPU memory is only used
+    by BoltzGen subprocess workers, which release all memory when they complete.
+
+    Output: Dictionary with:
+    - is_idle: True if no jobs queued or running
+    - all_gpus_free: True if all GPUs available for other programs
+    - resource_usage: Detailed breakdown of jobs and GPU states
+    """
+    logger.info("boltzgen_resource_status called")
+
+    try:
+        result = get_resource_status()
+
+        if result.get("is_idle") and result.get("all_gpus_free"):
+            logger.info("System idle - all GPUs free for other programs")
+        else:
+            logger.info(f"Resource status: {result.get('message')}")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Exception getting resource status: {e}")
+        return {
+            "status": "error",
+            "error_message": str(e),
+        }

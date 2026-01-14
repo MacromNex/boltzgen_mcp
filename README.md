@@ -33,7 +33,7 @@ BoltzGen MCP provides AI assistants (Claude Code, Gemini) with access to BoltzGe
 ├── README.md               # This file
 ├── env/                    # Conda environment with BoltzGen and dependencies
 ├── src/
-│   └── server.py           # MCP server with 10 tools
+│   └── server.py           # MCP server with 8 tools (includes job queue)
 ├── scripts/
 │   ├── protein_binder_design.py    # Protein binder design using protein-anything
 │   ├── peptide_binder_design.py    # Peptide binder design with cysteine filtering
@@ -141,6 +141,41 @@ python scripts/check_config.py \
   --config examples/data/1g13prot.yaml \
   --verbose
 ```
+
+---
+
+## Job Queue Configuration
+
+The BoltzGen MCP server uses a FIFO job queue with GPU-aware scheduling.
+
+### Default Behavior
+- **max_workers**: 1 (one job at a time)
+- **GPU detection**: Auto-detects available GPUs
+
+### Environment Variables
+
+Configure before starting the server:
+
+```bash
+# Set max concurrent jobs (match your GPU count for parallel execution)
+export BOLTZGEN_MAX_WORKERS=2
+
+# Specify which GPUs to use (comma-separated)
+export BOLTZGEN_GPU_IDS="0,1"
+
+# Start server with configuration
+BOLTZGEN_MAX_WORKERS=2 BOLTZGEN_GPU_IDS="0,1" python src/server.py
+```
+
+### Runtime Configuration
+
+Configure via MCP tool after server starts:
+
+```
+Configure job queue with max_workers=2 and gpu_ids="0,1"
+```
+
+This calls `boltzgen_configure_queue` to update settings dynamically.
 
 ---
 
@@ -280,34 +315,56 @@ gemini
 
 ## Available Tools
 
-### Quick Operations (Sync API)
+### Synchronous Execution
 
-These tools return results immediately (< 30 seconds):
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| `boltzgen_run` | Run complete design pipeline (blocks until done) | Small jobs, testing |
 
-| Tool | Description | Parameters | Example |
-|------|-------------|------------|---------|
-| `validate_config` | Validate BoltzGen configuration file | `config_file`, `verbose` | Quick pre-flight check |
+### Asynchronous Execution (Queue-Based)
 
-### Long-Running Tasks (Submit API)
+Jobs are processed in FIFO order with automatic GPU assignment:
 
-These tools return a job_id for tracking (5-30 minutes):
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `boltzgen_submit` | Submit job to queue | `config`, `output`, `protocol`, `num_designs`, `budget` |
+| `boltzgen_check_status` | Check job by output directory | `output_dir` |
+| `boltzgen_job_status` | Check job by job_id | `job_id` |
 
-| Tool | Description | Est. Runtime | Parameters |
-|------|-------------|--------------|------------|
-| `submit_protein_binder_design` | Design protein binders | 5-20 min | `config_file`, `output_dir`, `num_designs`, `budget` |
-| `submit_peptide_binder_design` | Design peptide binders | 5-15 min | `config_file`, `output_dir`, `alpha`, `num_designs` |
-| `submit_generic_boltzgen` | Run any BoltzGen protocol | 5-30 min | `config_file`, `protocol`, `output_dir` |
-| `submit_batch_protein_design` | Batch process multiple targets | Variable | `config_files`, `output_base_dir` |
-
-### Job Management Tools
+### Queue Management
 
 | Tool | Description |
 |------|-------------|
-| `get_job_status` | Check job progress (pending → running → completed/failed) |
-| `get_job_result` | Get results when completed |
-| `get_job_log` | View execution logs (supports tail parameter) |
-| `cancel_job` | Cancel running job |
-| `list_jobs` | List all jobs with optional status filtering |
+| `boltzgen_queue_status` | View queue length, running jobs, GPU availability |
+| `boltzgen_cancel_job` | Cancel a queued or running job |
+| `boltzgen_configure_queue` | Set max_workers and GPU configuration |
+| `boltzgen_resource_status` | Verify GPUs are freed when idle |
+
+### Job Queue Features
+
+- **FIFO Ordering**: Jobs processed in submission order
+- **GPU Auto-Assignment**: GPUs automatically allocated to jobs
+- **Parallel Execution**: Run multiple jobs on multiple GPUs
+- **Configurable Concurrency**: Default 1 job, configurable up to GPU count
+
+Example: Configure for 2-GPU parallel execution:
+```python
+boltzgen_configure_queue(max_workers=2, gpu_ids="0,1")
+```
+
+### Resource Management
+
+The MCP server is designed to **not hold GPU/CPU/memory resources** when idle:
+
+- **GPU Memory**: Jobs run in subprocess workers. When a job completes, the subprocess terminates and ALL GPU memory is immediately freed for other programs.
+- **CPU Usage**: The queue worker uses adaptive polling (5 seconds when idle) to minimize CPU usage.
+- **Memory**: Completed job metadata is cleaned from memory after 24 hours.
+
+Use `boltzgen_resource_status` to verify resources are freed:
+```
+> Check resource status
+# Returns: is_idle=True, all_gpus_free=True when no jobs running
+```
 
 ---
 
