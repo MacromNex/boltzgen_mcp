@@ -51,13 +51,25 @@ BoltzGen MCP provides AI assistants (Claude Code, Gemini) with access to BoltzGe
 
 ## Installation
 
+### Quick Setup (Recommended)
+
+Run the automated setup script:
+
+```bash
+cd boltzgen_mcp
+bash quick_setup.sh
+```
+
+The script will create the conda environment, install BoltzGen and all dependencies, and display the Claude Code configuration. See `quick_setup.sh --help` for options like `--skip-env`.
+
 ### Prerequisites
 - Conda or Mamba (mamba recommended for faster installation)
 - Python 3.10+
 - 8+ GB RAM, 7+ GB GPU memory recommended for protein design
 
-### Create Environment
-Following the verified procedure from `reports/step3_environment.md`:
+### Manual Installation (Alternative)
+
+If you prefer manual installation or need to customize the setup, follow `reports/step3_environment.md`:
 
 ```bash
 # Navigate to the MCP directory
