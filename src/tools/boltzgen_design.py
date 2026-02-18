@@ -259,11 +259,13 @@ def boltzgen_run(
         }
 
         if result["success"]:
-            # Count output PDB files
+            # Count output design files (PDB and CIF)
             if output_dir.exists():
                 pdb_files = list(output_dir.glob("**/*.pdb"))
-                output_stats["total_designs"] = len(pdb_files)
-                output_stats["pdb_files"] = [str(f.relative_to(output_dir)) for f in pdb_files[:20]]
+                cif_files = list(output_dir.glob("**/*.cif"))
+                design_files = pdb_files + cif_files
+                output_stats["total_designs"] = len(design_files)
+                output_stats["pdb_files"] = [str(f.relative_to(output_dir)) for f in design_files[:20]]
 
             logger.info(f"=" * 80)
             logger.info(f"Design completed. Generated {output_stats['total_designs']} designs")
@@ -536,10 +538,12 @@ def boltzgen_check_status(
         }
 
         if output_dir.exists():
-            # Find all PDB files
+            # Find all design files (PDB and CIF)
             pdb_files = list(output_dir.glob("**/*.pdb"))
-            stats["total_designs"] = len(pdb_files)
-            stats["pdb_files"] = [str(f.relative_to(output_dir)) for f in pdb_files[:20]]
+            cif_files = list(output_dir.glob("**/*.cif"))
+            design_files = pdb_files + cif_files
+            stats["total_designs"] = len(design_files)
+            stats["pdb_files"] = [str(f.relative_to(output_dir)) for f in design_files[:20]]
 
             # Find other relevant files
             for pattern in ["*.json", "*.csv", "*.txt"]:
