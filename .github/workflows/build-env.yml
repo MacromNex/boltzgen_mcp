@@ -43,6 +43,20 @@ jobs:
           conda install -n base conda-pack -y
           $(conda info --base)/bin/conda-pack -p ./env -o boltzgen_mcp-env.tar.gz --ignore-editable-packages
 
+      - name: Split archive if over 2GB
+        run: |
+          FILE_SIZE=$(stat -c%s boltzgen_mcp-env.tar.gz)
+          echo "Archive size: $FILE_SIZE bytes"
+          if [ "$FILE_SIZE" -gt 1900000000 ]; then
+            echo "Archive exceeds 1.9GB, splitting into parts..."
+            split -b 1900m boltzgen_mcp-env.tar.gz boltzgen_mcp-env.tar.gz.part-
+            rm boltzgen_mcp-env.tar.gz
+            ls -lh boltzgen_mcp-env.tar.gz.part-*
+            echo "SPLIT=true" >> $GITHUB_ENV
+          else
+            echo "SPLIT=false" >> $GITHUB_ENV
+          fi
+
       - name: Determine release tag
         id: tag
         run: |
@@ -65,14 +79,18 @@ jobs:
             USE_PACKED_ENVS=1 bash quick_setup.sh
             ```
 
-            **Usage in Google Colab:**
-            ```python
-            import os, subprocess
-            url = "https://github.com/<owner>/<repo>/releases/download/${{ steps.tag.outputs.tag }}/boltzgen_mcp-env.tar.gz"
-            subprocess.run(["wget", "-q", url])
-            os.makedirs("boltzgen_mcp/env", exist_ok=True)
-            subprocess.run(["tar", "xzf", "boltzgen_mcp-env.tar.gz", "-C", "boltzgen_mcp/env"])
-            subprocess.run(["bash", "-c", "source boltzgen_mcp/env/bin/activate && conda-unpack"])
+            **Manual download & extract:**
+            If the archive was split into parts, reassemble first:
+            ```bash
+            cat boltzgen_mcp-env.tar.gz.part-* > boltzgen_mcp-env.tar.gz
             ```
-          files: boltzgen_mcp-env.tar.gz
-          fail_on_unmatched_files: true
+            Then extract:
+            ```bash
+            mkdir -p env
+            tar xzf boltzgen_mcp-env.tar.gz -C env
+            source env/bin/activate && conda-unpack
+            ```
+          files: |
+            boltzgen_mcp-env.tar.gz
+            boltzgen_mcp-env.tar.gz.part-*
+          fail_on_unmatched_files: false

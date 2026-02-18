@@ -17,7 +17,7 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY src/ ./src/
 COPY configs/ ./configs/
-COPY examples/data/ ./examples/data/
+COPY examples/ ./examples/
 COPY scripts/ ./scripts/
 RUN mkdir -p tmp/inputs tmp/outputs jobs results
 
