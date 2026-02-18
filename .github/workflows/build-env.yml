@@ -1,0 +1,78 @@
+name: Build & Release Conda Env
+
+on:
+  push:
+    tags: ['envs-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. envs-v1)'
+        required: true
+        default: 'envs-v1'
+
+jobs:
+  build-env:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: '3.12'
+          miniconda-version: latest
+          auto-activate-base: true
+
+      - name: Create conda env
+        shell: bash -el {0}
+        run: |
+          conda create -p ./env python=3.12 -y
+
+      - name: Install dependencies
+        shell: bash -el {0}
+        run: |
+          ./env/bin/pip install -r requirements.txt
+          ./env/bin/pip install --ignore-installed fastmcp
+
+      - name: Pack environment
+        shell: bash -el {0}
+        run: |
+          conda install -n base conda-pack -y
+          $(conda info --base)/bin/conda-pack -p ./env -o boltzgen_mcp-env.tar.gz --ignore-editable-packages
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Conda Environment ${{ steps.tag.outputs.tag }}"
+          body: |
+            Pre-packaged conda environment for `boltzgen_mcp`.
+
+            **Usage in quick_setup.sh:**
+            ```bash
+            USE_PACKED_ENVS=1 bash quick_setup.sh
+            ```
+
+            **Usage in Google Colab:**
+            ```python
+            import os, subprocess
+            url = "https://github.com/<owner>/<repo>/releases/download/${{ steps.tag.outputs.tag }}/boltzgen_mcp-env.tar.gz"
+            subprocess.run(["wget", "-q", url])
+            os.makedirs("boltzgen_mcp/env", exist_ok=True)
+            subprocess.run(["tar", "xzf", "boltzgen_mcp-env.tar.gz", "-C", "boltzgen_mcp/env"])
+            subprocess.run(["bash", "-c", "source boltzgen_mcp/env/bin/activate && conda-unpack"])
+            ```
+          files: boltzgen_mcp-env.tar.gz
+          fail_on_unmatched_files: true

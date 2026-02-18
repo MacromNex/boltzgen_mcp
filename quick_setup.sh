@@ -129,19 +129,30 @@ echo ""
 echo -e "${BLUE}Step 1: Setting up conda environment${NC}"
 echo "--------------------------------------"
 
+# Fast path: use pre-packaged conda env from GitHub Releases
+PACKED_ENV_URL="${PACKED_ENV_URL:-}"
+PACKED_ENV_TAG="${PACKED_ENV_TAG:-envs-v1}"
+PACKED_ENV_BASE="https://github.com/charlesxu90/ProteinMCP/releases/download/${PACKED_ENV_TAG}"
+
 if [ "$SKIP_ENV" = true ]; then
     info "Skipping environment creation (--skip-env)"
-elif [ -d "$ENV_DIR" ]; then
-    warn "Environment directory already exists at: $ENV_DIR"
-    read -p "Do you want to recreate it? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        info "Removing existing environment..."
-        rm -rf "$ENV_DIR"
-        info "Creating new conda environment with Python ${PYTHON_VERSION}..."
-        $CONDA_CMD create -p "$ENV_DIR" python=${PYTHON_VERSION} -y
+elif [ -d "$ENV_DIR" ] && [ -f "$ENV_DIR/bin/python" ]; then
+    info "Environment already exists at: $ENV_DIR"
+elif [ "${USE_PACKED_ENVS:-}" = "1" ] || [ -n "$PACKED_ENV_URL" ]; then
+    # Download and extract pre-packaged conda environment
+    PACKED_ENV_URL="${PACKED_ENV_URL:-${PACKED_ENV_BASE}/boltzgen_mcp-env.tar.gz}"
+    info "Downloading pre-packaged environment from ${PACKED_ENV_URL}..."
+    mkdir -p "$ENV_DIR"
+    if wget -qO- "$PACKED_ENV_URL" | tar xzf - -C "$ENV_DIR"; then
+        source "$ENV_DIR/bin/activate"
+        conda-unpack 2>/dev/null || true
+        success "Pre-packaged environment ready"
+        SKIP_ENV=true
     else
-        info "Using existing environment"
+        warn "Failed to download pre-packaged env, falling back to conda create..."
+        rm -rf "$ENV_DIR"
+        info "Creating conda environment with Python ${PYTHON_VERSION}..."
+        $CONDA_CMD create -p "$ENV_DIR" python=${PYTHON_VERSION} -y
     fi
 else
     info "Creating conda environment with Python ${PYTHON_VERSION}..."
@@ -156,11 +167,18 @@ echo "--------------------------------"
 if [ "$SKIP_ENV" = true ]; then
     info "Skipping dependency installation (--skip-env)"
 else
-    info "Installing core MCP dependencies..."
-    $CONDA_CMD run -p "$ENV_DIR" pip install fastmcp==2.13.3 loguru==0.7.3
+    if [ -f "${SCRIPT_DIR}/requirements.txt" ]; then
+        info "Installing from requirements.txt..."
+        "${ENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt"
+    else
+        info "Installing core MCP dependencies..."
+        "${ENV_DIR}/bin/pip" install fastmcp==2.13.3 loguru==0.7.3
+        info "Installing BoltzGen (this may take a few minutes)..."
+        "${ENV_DIR}/bin/pip" install boltzgen
+    fi
 
-    info "Installing BoltzGen (this may take a few minutes)..."
-    $CONDA_CMD run -p "$ENV_DIR" pip install boltzgen
+    info "Installing fastmcp..."
+    "${ENV_DIR}/bin/pip" install --ignore-installed fastmcp
 
     success "Dependencies installed successfully"
 fi
