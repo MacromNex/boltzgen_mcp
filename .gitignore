@@ -12,7 +12,6 @@ claude_outputs/
 .claude/
 .pipeline/
 env/
-reports/
 templates/
 tests/
 .gemini/

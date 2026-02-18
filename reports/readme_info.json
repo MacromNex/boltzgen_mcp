@@ -1,0 +1,224 @@
+{
+  "project_name": "boltzgen",
+  "description": "AI-powered protein design through the Model Context Protocol - Design protein binders, peptide binders, and custom proteins with BoltzGen",
+  "mcp_server_path": "src/server.py",
+  "environment_path": "./env",
+  "python_version": "3.12",
+  "tools": [
+    {
+      "name": "get_job_status",
+      "type": "job_management",
+      "description": "Check job progress (pending → running → completed/failed)",
+      "example_prompt": "Check the status of job abc123"
+    },
+    {
+      "name": "get_job_result",
+      "type": "job_management",
+      "description": "Get results when completed",
+      "example_prompt": "Get the results for completed job abc123"
+    },
+    {
+      "name": "get_job_log",
+      "type": "job_management",
+      "description": "View execution logs (supports tail parameter)",
+      "example_prompt": "Show me the last 20 lines of the log for job abc123"
+    },
+    {
+      "name": "cancel_job",
+      "type": "job_management",
+      "description": "Cancel running job",
+      "example_prompt": "Cancel job abc123"
+    },
+    {
+      "name": "list_jobs",
+      "type": "job_management",
+      "description": "List all jobs with optional status filtering",
+      "example_prompt": "List all running jobs"
+    },
+    {
+      "name": "validate_config",
+      "type": "sync",
+      "description": "Validate BoltzGen configuration file quickly (~30 seconds)",
+      "example_prompt": "Use validate_config with config_file \"@examples/data/1g13prot.yaml\""
+    },
+    {
+      "name": "submit_protein_binder_design",
+      "type": "submit",
+      "description": "Design protein binders using protein-anything protocol (5-20 minutes)",
+      "example_prompt": "Submit protein binder design for @examples/data/1g13prot.yaml with output_dir \"results/test_design\" and num_designs 5"
+    },
+    {
+      "name": "submit_peptide_binder_design",
+      "type": "submit",
+      "description": "Design peptide binders with cysteine filtering (5-15 minutes)",
+      "example_prompt": "Submit peptide binder design for @examples/data/beetletert.yaml with alpha 0.01 and budget 2"
+    },
+    {
+      "name": "submit_generic_boltzgen",
+      "type": "submit",
+      "description": "Run any BoltzGen protocol (5-30 minutes)",
+      "example_prompt": "Submit generic BoltzGen with protocol \"protein-anything\" for custom.yaml"
+    },
+    {
+      "name": "submit_batch_protein_design",
+      "type": "submit",
+      "description": "Batch process multiple targets",
+      "example_prompt": "Submit batch protein design for [\"config1.yaml\", \"config2.yaml\", \"config3.yaml\"]"
+    }
+  ],
+  "scripts": [
+    {
+      "name": "protein_binder_design.py",
+      "description": "Design protein binders using protein-anything protocol",
+      "example_command": "python scripts/protein_binder_design.py --input examples/data/1g13prot.yaml --output results/protein_binder_1g13 --num_designs 10 --budget 2",
+      "use_case": "Target protein binding"
+    },
+    {
+      "name": "peptide_binder_design.py",
+      "description": "Design peptide binders with cysteine filtering",
+      "example_command": "python scripts/peptide_binder_design.py --input examples/data/beetletert.yaml --output results/peptide_binder --alpha 0.01 --num_designs 15",
+      "use_case": "Peptide drug discovery"
+    },
+    {
+      "name": "run_boltzgen.py",
+      "description": "Run any BoltzGen protocol with custom parameters",
+      "example_command": "python scripts/run_boltzgen.py --config examples/data/1g13prot.yaml --output results/ --protocol protein-anything",
+      "use_case": "Custom protocols"
+    },
+    {
+      "name": "check_config.py",
+      "description": "Fast validation of BoltzGen configurations",
+      "example_command": "python scripts/check_config.py --config examples/data/1g13prot.yaml --verbose",
+      "use_case": "Pre-flight checks"
+    }
+  ],
+  "demo_data": [
+    {
+      "file": "1g13prot.yaml",
+      "description": "Protein binder design for 1G13",
+      "target_structure": "1g13.cif",
+      "used_by": ["protein_binder_design", "submit_protein_binder_design"]
+    },
+    {
+      "file": "beetletert.yaml",
+      "description": "Peptide binder with binding site",
+      "target_structure": "5cqg.cif",
+      "used_by": ["peptide_binder_design", "submit_peptide_binder_design"]
+    },
+    {
+      "file": "chorismite.yaml",
+      "description": "Small molecule binding design",
+      "target_structure": "TSA ligand",
+      "used_by": ["generic_boltzgen"]
+    },
+    {
+      "file": "penguinpox.yaml",
+      "description": "Nanobody CDR design",
+      "target_structure": "9bkq-assembly2.cif",
+      "used_by": ["generic_boltzgen"]
+    },
+    {
+      "file": "pdl1_simplified.yaml",
+      "description": "Simplified antibody design",
+      "target_structure": "7rpz.cif",
+      "used_by": ["protein_binder_design", "validate_config"]
+    },
+    {
+      "file": "pdl1.yaml",
+      "description": "Full antibody design config",
+      "target_structure": "7rpz.cif",
+      "used_by": ["protein_binder_design"]
+    }
+  ],
+  "configs": [
+    {
+      "file": "default_config.json",
+      "description": "Default settings for all tools",
+      "parameters": {
+        "protocol": "protein-anything",
+        "num_designs": 10,
+        "budget": 2,
+        "distributed": {"master_port": 29500},
+        "compute": {"cuda_device": null},
+        "output": {"format": ["cif", "pdb"], "include_metadata": true}
+      }
+    },
+    {
+      "file": "protein_binder_config.json",
+      "description": "Optimized for protein binder design",
+      "parameters": {
+        "protocol": "protein-anything"
+      }
+    },
+    {
+      "file": "peptide_binder_config.json",
+      "description": "Optimized for peptide design",
+      "parameters": {
+        "protocol": "peptide-anything",
+        "cysteine_filtering": true
+      }
+    }
+  ],
+  "protocols": [
+    {
+      "name": "protein-anything",
+      "description": "General protein binder design (default)",
+      "use_case": "Target protein binding",
+      "est_runtime": "5-20 minutes"
+    },
+    {
+      "name": "peptide-anything",
+      "description": "Peptide binder design (filters cysteines)",
+      "use_case": "Peptide drug discovery",
+      "est_runtime": "5-15 minutes"
+    },
+    {
+      "name": "protein-small_molecule",
+      "description": "Protein-small molecule interaction design",
+      "use_case": "Small molecule binding",
+      "est_runtime": "5-30 minutes"
+    },
+    {
+      "name": "nanobody-anything",
+      "description": "Nanobody CDR design",
+      "use_case": "Single-domain antibodies",
+      "est_runtime": "5-20 minutes"
+    },
+    {
+      "name": "antibody-anything",
+      "description": "Full antibody design (heavy/light chains)",
+      "use_case": "Therapeutic antibodies",
+      "est_runtime": "10-30 minutes"
+    }
+  ],
+  "installation": {
+    "package_manager": "mamba",
+    "python_version": "3.12",
+    "core_dependencies": ["fastmcp==2.13.3", "loguru==0.7.3", "boltzgen"],
+    "environment_path": "./env"
+  },
+  "integration_status": {
+    "claude_code": "✅ Tested and working",
+    "gemini_cli": "✅ Configuration provided",
+    "fastmcp": "✅ Supported",
+    "all_tests_passed": true,
+    "total_tools": 10,
+    "job_management_tools": 5,
+    "sync_tools": 1,
+    "submit_tools": 4
+  },
+  "performance": {
+    "resource_requirements": {
+      "ram": "8-16 GB",
+      "gpu_memory": "7+ GB VRAM",
+      "disk_space": "1-5 GB per design"
+    },
+    "benchmarks": {
+      "protein_design_runtime": "6m 8s",
+      "peptide_design_runtime": "5m 32s",
+      "config_validation": "4-5 seconds",
+      "job_submission": "<100ms",
+      "status_checks": "<50ms"
+    }
+  }
+}

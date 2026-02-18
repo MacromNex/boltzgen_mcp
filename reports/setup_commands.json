@@ -1,0 +1,8 @@
+{
+  "setup_commands": [
+    "(command -v mamba >/dev/null 2>&1 && mamba create -p ./env python=3.12 -y) || (command -v conda >/dev/null 2>&1 && conda create -p ./env python=3.12 -y) || (echo \"Warning: Neither mamba nor conda found, creating venv instead\" && python3 -m venv ./env)",
+    "./env/bin/pip install fastmcp==2.13.3 loguru==0.7.3",
+    "./env/bin/pip install boltzgen",
+    "./env/bin/pip install --ignore-installed fastmcp"
+  ]
+}
