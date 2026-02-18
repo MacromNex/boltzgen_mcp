@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir --prefix=/install --ignore-installed fastmcp
 
 FROM python:3.12-slim AS runtime
 
-RUN apt-get update && apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libgomp1 gcc && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /install /usr/local
@@ -22,5 +22,9 @@ COPY scripts/ ./scripts/
 RUN mkdir -p tmp/inputs tmp/outputs jobs results
 
 ENV PYTHONPATH=/app
+ENV HF_HOME=/root/.cache
+
+# Pre-download model weights (~6GB) into the final image layer
+RUN boltzgen download all
 
 CMD ["python", "src/server.py"]
