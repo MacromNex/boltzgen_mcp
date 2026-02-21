@@ -34,5 +34,13 @@ RUN mkdir -p /app/.config/matplotlib && \
 
 ENV HOME=/app
 ENV MPLCONFIGDIR=/app/.config/matplotlib
+# Prevent torch._dynamo from calling getpass.getuser() which fails for unknown UIDs
+ENV TORCHINDUCTOR_CACHE_DIR=/app/.cache/torch_inductor
 
+# Allow any UID to resolve via NSS (fixes getpwuid KeyError for --user flag)
+RUN chmod 666 /etc/passwd
+# Create entrypoint that adds the runtime UID to /etc/passwd if missing
+RUN printf '#!/bin/bash\nif ! whoami &>/dev/null; then\n  echo "appuser:x:$(id -u):$(id -g)::/app:/bin/bash" >> /etc/passwd\nfi\nexec "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python", "src/server.py"]
