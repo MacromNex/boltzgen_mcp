@@ -28,7 +28,11 @@ ENV HF_HOME=/app/.cache
 RUN boltzgen download all
 
 # Make /app directory readable and writable by all users (for non-root execution)
-RUN chmod -R 755 /app && \
-    chmod -R 777 /app/tmp/inputs /app/tmp/outputs /app/jobs /app/results /app/.cache
+RUN mkdir -p /app/.config/matplotlib && \
+    chmod -R 755 /app && \
+    chmod -R 777 /app/tmp/inputs /app/tmp/outputs /app/jobs /app/results /app/.cache /app/.config
+
+ENV HOME=/app
+ENV MPLCONFIGDIR=/app/.config/matplotlib
 
 CMD ["python", "src/server.py"]
