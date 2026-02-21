@@ -1,704 +1,229 @@
 # BoltzGen MCP
 
-> AI-powered protein design through the Model Context Protocol - Design protein binders, peptide binders, and custom proteins with BoltzGen
+**AI-powered protein design via Docker and Model Context Protocol**
 
-## Table of Contents
-- [Overview](#overview)
-- [Installation](#installation)
-- [Local Usage (Scripts)](#local-usage-scripts)
-- [MCP Server Installation](#mcp-server-installation)
-- [Using with Claude Code](#using-with-claude-code)
-- [Using with Gemini CLI](#using-with-gemini-cli)
-- [Available Tools](#available-tools)
-- [Examples](#examples)
-- [Demo Data](#demo-data)
-- [Configuration Files](#configuration-files)
-- [Troubleshooting](#troubleshooting)
+Design protein binders, peptide binders, and custom proteins using BoltzGen with:
+- **Protein Binder Design** — Design proteins that bind to target proteins
+- **Peptide Binder Design** — Generate peptides with optimized sequences
+- **Multiple Protocols** — Support for antibodies, nanobodies, and small molecule interactions
+- **Async Job Queue** — FIFO scheduling with GPU-aware resource management
+- **Docker Deployment** — Pre-built images with all dependencies included
 
-## Overview
+## Quick Start with Docker
 
-BoltzGen MCP provides AI assistants (Claude Code, Gemini) with access to BoltzGen, a state-of-the-art protein design platform. This MCP server enables seamless protein design workflows including protein binders, peptide binders, nanobodies, and antibodies through simple conversational prompts.
+### Approach 1: Pull Pre-built Image from GitHub
 
-### Features
-- **Protein Binder Design**: Design proteins that bind to target proteins using protein-anything protocol
-- **Peptide Binder Design**: Generate peptides (including cyclic) with cysteine filtering optimization
-- **Flexible Protocols**: Support for protein-small_molecule, nanobody-anything, and antibody-anything
-- **Asynchronous Job Management**: Submit long-running jobs and track progress with real-time logs
-- **Batch Processing**: Process multiple targets efficiently in parallel
-- **Quick Validation**: Fast configuration file validation without full pipeline execution
+The fastest way to get started. A pre-built Docker image is automatically published to GitHub Container Registry on every release.
 
-### Directory Structure
+```bash
+# Pull the latest image
+docker pull ghcr.io/macromnex/boltzgen_mcp:latest
+
+# Register with Claude Code (runs as current user to avoid permission issues)
+claude mcp add boltzgen -- docker run -i --rm --user `id -u`:`id -g` --gpus all --ipc=host -v `pwd`:`pwd` ghcr.io/macromnex/boltzgen_mcp:latest
 ```
-./
-├── README.md               # This file
-├── env/                    # Conda environment with BoltzGen and dependencies
-├── src/
-│   └── server.py           # MCP server with 8 tools (includes job queue)
-├── scripts/
-│   ├── protein_binder_design.py    # Protein binder design using protein-anything
-│   ├── peptide_binder_design.py    # Peptide binder design with cysteine filtering
-│   ├── run_boltzgen.py             # Generic BoltzGen runner for any protocol
-│   ├── check_config.py             # Fast configuration validation
-│   └── lib/                        # Shared utilities and job management
-├── examples/
-│   └── data/               # Demo configurations and structures
-├── configs/                # Default configuration templates
-├── jobs/                   # Active and completed job tracking
-└── reports/                # Documentation and analysis reports
-```
+
+**Note:** Run from your project directory. `${pwd}` expands to the current working directory.
+
+**Requirements:**
+- Docker with GPU support (`nvidia-docker` or Docker with NVIDIA runtime)
+- Claude Code installed
+
+That's it! The BoltzGen MCP server is now available in Claude Code.
 
 ---
 
-## Installation
+### Approach 2: Build Docker Image Locally
 
-### Quick Setup (Recommended)
-
-Run the automated setup script:
+Build the image yourself and install it into Claude Code. Useful for customization or offline environments.
 
 ```bash
+# Clone the repository
+git clone https://github.com/MacromNex/boltzgen_mcp.git
 cd boltzgen_mcp
-bash quick_setup.sh
+
+# Build the Docker image
+docker build -t boltzgen_mcp:latest .
+
+# Register with Claude Code (runs as current user to avoid permission issues)
+claude mcp add boltzgen -- docker run -i --rm --user `id -u`:`id -g` --gpus all --ipc=host -v `pwd`:`pwd` boltzgen_mcp:latest
 ```
 
-The script will create the conda environment, install BoltzGen and all dependencies, and display the Claude Code configuration. See `quick_setup.sh --help` for options like `--skip-env`.
+**Note:** Run from your project directory. `${pwd}` expands to the current working directory.
 
-### Prerequisites
-- Conda or Mamba (mamba recommended for faster installation)
-- Python 3.10+
-- 8+ GB RAM, 7+ GB GPU memory recommended for protein design
+**Requirements:**
+- Docker with GPU support
+- Claude Code installed
+- Git (to clone the repository)
 
-### Manual Installation (Alternative)
-
-If you prefer manual installation or need to customize the setup, follow `reports/step3_environment.md`:
-
-```bash
-# Navigate to the MCP directory
-cd /home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp
-
-# Create conda environment (use mamba if available)
-mamba create -p ./env python=3.12 -y
-# or: conda create -p ./env python=3.12 -y
-
-# Activate environment
-mamba activate ./env
-# or: conda activate ./env
-
-# Install core dependencies
-pip install fastmcp==2.13.3 loguru==0.7.3
-
-# Install BoltzGen (this installs PyTorch, protein libraries, etc.)
-pip install boltzgen
-
-# Verify installation
-python -c "from src.server import mcp; print('BoltzGen MCP server ready!')"
-```
+**About the Docker Flags:**
+- `-i` — Interactive mode for Claude Code
+- `--rm` — Automatically remove container after exit
+- `--user ${id -u}:${id -g}` — Runs the container as your current user, so output files are owned by you (not root)
+- `--gpus all` — Grants access to all available GPUs
+- `--ipc=host` — Uses host IPC namespace for better performance
+- `-v` — Mounts your project directory so the container can access your data
 
 ---
 
-## Local Usage (Scripts)
+## Verify Installation
 
-You can use the scripts directly without MCP for local processing.
-
-### Available Scripts
-
-| Script | Description | Example Use Case |
-|--------|-------------|------------------|
-| `scripts/protein_binder_design.py` | Design protein binders using protein-anything protocol | Target protein binding |
-| `scripts/peptide_binder_design.py` | Design peptide binders with cysteine filtering | Peptide drug discovery |
-| `scripts/run_boltzgen.py` | Run any BoltzGen protocol with custom parameters | Custom protocols |
-| `scripts/check_config.py` | Fast validation of BoltzGen configurations | Pre-flight checks |
-
-### Script Examples
-
-#### Protein Binder Design
+After adding the MCP server, you can verify it's working:
 
 ```bash
-# Activate environment
-mamba activate ./env
-
-# Design protein binders for target protein
-python scripts/protein_binder_design.py \
-  --input examples/data/1g13prot.yaml \
-  --output results/protein_binder_1g13 \
-  --num_designs 10 \
-  --budget 2
-```
-
-**Parameters:**
-- `--input, -i`: BoltzGen YAML configuration file (required)
-- `--output, -o`: Output directory for designed proteins (required)
-- `--num_designs`: Number of designs to generate (default: 10)
-- `--budget`: Computational budget for design quality (default: 2)
-- `--cuda_device`: CUDA device ID (auto-detected if None)
-
-#### Peptide Binder Design
-
-```bash
-python scripts/peptide_binder_design.py \
-  --input examples/data/beetletert.yaml \
-  --output results/peptide_binder \
-  --alpha 0.01 \
-  --num_designs 15
-```
-
-**Parameters:**
-- `--alpha`: Diversity vs quality trade-off (0.0=quality focused, 1.0=diversity focused)
-- Other parameters same as protein binder design
-
-#### Configuration Validation
-
-```bash
-# Quick validation before full design run
-python scripts/check_config.py \
-  --config examples/data/1g13prot.yaml \
-  --verbose
-```
-
----
-
-## Job Queue Configuration
-
-The BoltzGen MCP server uses a FIFO job queue with GPU-aware scheduling.
-
-### Default Behavior
-- **max_workers**: 1 (one job at a time)
-- **GPU detection**: Auto-detects available GPUs
-
-### Environment Variables
-
-Configure before starting the server:
-
-```bash
-# Set max concurrent jobs (match your GPU count for parallel execution)
-export BOLTZGEN_MAX_WORKERS=2
-
-# Specify which GPUs to use (comma-separated)
-export BOLTZGEN_GPU_IDS="0,1"
-
-# Start server with configuration
-BOLTZGEN_MAX_WORKERS=2 BOLTZGEN_GPU_IDS="0,1" python src/server.py
-```
-
-### Runtime Configuration
-
-Configure via MCP tool after server starts:
-
-```
-Configure job queue with max_workers=2 and gpu_ids="0,1"
-```
-
-This calls `boltzgen_configure_queue` to update settings dynamically.
-
----
-
-## MCP Server Installation
-
-### Option 1: Using fastmcp (Recommended)
-
-```bash
-# Install MCP server for Claude Code
-fastmcp install src/server.py --name boltzgen
-```
-
-### Option 2: Manual Installation for Claude Code
-
-```bash
-# Add MCP server to Claude Code
-claude mcp add boltzgen -- $(pwd)/env/bin/python $(pwd)/src/server.py
-
-# Verify installation
+# List registered MCP servers
 claude mcp list
-# Should show: boltzgen: ... - ✓ Connected
+
+# You should see 'boltzgen' in the output
 ```
 
-### Option 3: Configure in settings.json
-
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "boltzgen": {
-      "command": "/home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/env/bin/python",
-      "args": ["/home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/src/server.py"]
-    }
-  }
-}
-```
+In Claude Code, you can now use all 8 BoltzGen tools:
+- `boltzgen_run` — Synchronous protein design
+- `boltzgen_submit` — Submit async design jobs
+- `boltzgen_check_status` — Monitor job progress by output directory
+- `boltzgen_job_status` — Check job by ID
+- `boltzgen_queue_status` — View queue and GPU availability
+- `boltzgen_cancel_job` — Cancel jobs
+- `boltzgen_configure_queue` — Set max workers and GPU configuration
+- `boltzgen_resource_status` — Verify GPU resource management
 
 ---
 
-## Using with Claude Code
+## Next Steps
 
-After installing the MCP server, you can use it directly in Claude Code.
+- **Detailed documentation**: See [details.md](details.md) for comprehensive guides on:
+  - Local Python environment setup (alternative to Docker)
+  - Available MCP tools and parameters
+  - Example workflows and tutorials
+  - Configuration file formats
+  - Troubleshooting
 
-### Quick Start
+---
 
-```bash
-# Start Claude Code
-claude
-```
+## Usage Examples
 
-### Example Prompts
+Once registered, you can use the BoltzGen tools directly in Claude Code. Here are some common workflows:
 
-#### Tool Discovery
-```
-What tools are available from boltzgen?
-```
+### Example 1: Quick Protein Design
 
-#### Configuration Validation
-```
-Use validate_config with config_file "@examples/data/1g13prot.yaml"
-```
-
-#### Basic Protein Design
 ```
 Submit protein binder design for @examples/data/1g13prot.yaml
-with output_dir "results/test_design" and num_designs 5
+with output_dir "results/1g13_design" and num_designs 5
 ```
 
-#### Peptide Design with Parameters
-```
-Submit peptide binder design for @examples/data/beetletert.yaml
-with alpha 0.01 (quality focused) and budget 2
-```
+### Example 2: Peptide Binder with Quality Focus
 
-#### Job Monitoring
-```
-Submit a protein design job, then:
-1. Check its status every 30 seconds
-2. Show me the last 20 lines of the log
-3. Get the results when it completes
-```
-
-#### Batch Processing
-```
-Submit batch protein design for these configs:
-- @examples/data/1g13prot.yaml
-- @examples/data/beetletert.yaml
-- @examples/data/pdl1_simplified.yaml
-
-Save to output_base_dir "results/batch_design"
-```
-
-### Using @ References
-
-In Claude Code, use `@` to reference files and directories:
-
-| Reference | Description |
-|-----------|-------------|
-| `@examples/data/1g13prot.yaml` | Reference a specific config file |
-| `@examples/data/` | Reference the data directory |
-| `@configs/default_config.json` | Reference default config template |
-| `@results/` | Reference output directory |
-
----
-
-## Using with Gemini CLI
-
-### Configuration
-
-Add to `~/.gemini/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "boltzgen": {
-      "command": "/home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/env/bin/python",
-      "args": ["/home/xux/Desktop/ProteinMCP/ProteinMCP/tool-mcps/boltzgen_mcp/src/server.py"]
-    }
-  }
-}
-```
-
-### Example Prompts
-
-```bash
-# Start Gemini CLI
-gemini
-
-# Example prompts (same as Claude Code)
-> What tools are available?
-> Submit protein binder design for examples/data/1g13prot.yaml
-> Check job status and show logs
-```
-
----
-
-## Available Tools
-
-### Synchronous Execution
-
-| Tool | Description | Use Case |
-|------|-------------|----------|
-| `boltzgen_run` | Run complete design pipeline (blocks until done) | Small jobs, testing |
-
-### Asynchronous Execution (Queue-Based)
-
-Jobs are processed in FIFO order with automatic GPU assignment:
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `boltzgen_submit` | Submit job to queue | `config`, `output`, `protocol`, `num_designs`, `budget` |
-| `boltzgen_check_status` | Check job by output directory | `output_dir` |
-| `boltzgen_job_status` | Check job by job_id | `job_id` |
-
-### Queue Management
-
-| Tool | Description |
-|------|-------------|
-| `boltzgen_queue_status` | View queue length, running jobs, GPU availability |
-| `boltzgen_cancel_job` | Cancel a queued or running job |
-| `boltzgen_configure_queue` | Set max_workers and GPU configuration |
-| `boltzgen_resource_status` | Verify GPUs are freed when idle |
-
-### Job Queue Features
-
-- **FIFO Ordering**: Jobs processed in submission order
-- **GPU Auto-Assignment**: GPUs automatically allocated to jobs
-- **Parallel Execution**: Run multiple jobs on multiple GPUs
-- **Configurable Concurrency**: Default 1 job, configurable up to GPU count
-
-Example: Configure for 2-GPU parallel execution:
-```python
-boltzgen_configure_queue(max_workers=2, gpu_ids="0,1")
-```
-
-### Resource Management
-
-The MCP server is designed to **not hold GPU/CPU/memory resources** when idle:
-
-- **GPU Memory**: Jobs run in subprocess workers. When a job completes, the subprocess terminates and ALL GPU memory is immediately freed for other programs.
-- **CPU Usage**: The queue worker uses adaptive polling (5 seconds when idle) to minimize CPU usage.
-- **Memory**: Completed job metadata is cleaned from memory after 24 hours.
-
-Use `boltzgen_resource_status` to verify resources are freed:
-```
-> Check resource status
-# Returns: is_idle=True, all_gpus_free=True when no jobs running
-```
-
----
-
-## Examples
-
-### Example 1: Protein Binder Design for 1G13
-
-**Goal:** Design protein binders that bind to the 1G13 protein structure
-
-**Using Script:**
-```bash
-python scripts/protein_binder_design.py \
-  --input examples/data/1g13prot.yaml \
-  --output results/1g13_binders \
-  --num_designs 10
-```
-
-**Using MCP (in Claude Code):**
-```
-Submit protein binder design for @examples/data/1g13prot.yaml
-with output_dir "results/1g13_binders" and num_designs 10
-```
-
-**Expected Output:**
-- 10 designed protein structures in CIF/PDB format
-- Design logs showing generation and filtering steps
-- Statistics on design quality and diversity
-
-### Example 2: Peptide Binder Design for BeetleTert
-
-**Goal:** Design quality-focused peptides that bind to BeetleTert protein
-
-**Using Script:**
-```bash
-python scripts/peptide_binder_design.py \
-  --input examples/data/beetletert.yaml \
-  --output results/beetletert_peptides \
-  --alpha 0.01 \
-  --num_designs 20
-```
-
-**Using MCP (in Claude Code):**
 ```
 Submit peptide binder design for @examples/data/beetletert.yaml
-with output_dir "results/beetletert_peptides", alpha 0.01, and num_designs 20
+with output_dir "results/peptide_design", alpha 0.01 (quality focused),
+and num_designs 10
 ```
 
-**Expected Output:**
-- 20 designed peptide structures with cysteine filtering
-- Diversity analysis and binding predictions
-- Quality-focused designs due to low alpha value
+### Example 3: Async Job Submission and Monitoring
 
-### Example 3: Configuration Validation Workflow
-
-**Goal:** Validate multiple configurations before submitting long jobs
-
-**Using Script:**
-```bash
-for config in examples/data/*.yaml; do
-  echo "Validating $config..."
-  python scripts/check_config.py --config "$config" --verbose
-done
 ```
-
-**Using MCP (in Claude Code):**
-```
-Validate all YAML configs in @examples/data/ and show me which ones are valid:
-- Check @examples/data/1g13prot.yaml
-- Check @examples/data/beetletert.yaml
-- Check @examples/data/pdl1_simplified.yaml
+1. Submit async protein design for @examples/data/1g13prot.yaml
+   with output_dir "results/async_design" and num_designs 10
+2. Check job status every 30 seconds
+3. When complete, show me the generated structures
 ```
 
 ### Example 4: Batch Processing Multiple Targets
 
-**Goal:** Process multiple protein targets efficiently
-
-**Using MCP (in Claude Code):**
 ```
-Submit batch protein design for these three targets:
+Submit batch protein design for these configs:
 - @examples/data/1g13prot.yaml (1G13 protein)
 - @examples/data/beetletert.yaml (BeetleTert)
 - @examples/data/pdl1_simplified.yaml (PDL1)
 
-Save to output_base_dir "results/multi_target_batch" with num_designs 5 each
+Save to output_base_dir "results/batch" with num_designs 5 each
 ```
 
-**Expected Output:**
-- Three subdirectories: `1g13prot_protein_design/`, `beetletert_protein_design/`, `pdl1_simplified_protein_design/`
-- 5 designs per target (15 total designs)
-- Batch processing logs showing progress through all targets
+### Example 5: Validate Configuration Before Design
+
+```
+Validate these configs and show me any issues:
+- @examples/data/1g13prot.yaml
+- @examples/data/beetletert.yaml
+- @examples/data/chorismite.yaml
+```
+
+### Example 6: Monitor Job Queue
+
+```
+Show me the current job queue status and available GPUs
+```
 
 ---
 
 ## Demo Data
 
-The `examples/data/` directory contains sample configurations for testing:
+Example configuration files are included in `examples/data/`:
 
-| File | Description | Target Structure | Use With |
-|------|-------------|------------------|----------|
-| `1g13prot.yaml` | Protein binder design for 1G13 | `1g13.cif` | protein_binder_design |
-| `beetletert.yaml` | Peptide binder with binding site | `5cqg.cif` | peptide_binder_design |
-| `chorismite.yaml` | Small molecule binding design | TSA ligand | generic_boltzgen |
-| `penguinpox.yaml` | Nanobody CDR design | `9bkq-assembly2.cif` | generic_boltzgen |
-| `pdl1_simplified.yaml` | Simplified antibody design | `7rpz.cif` | protein_binder_design |
-| `pdl1.yaml` | Full antibody design config | `7rpz.cif` | protein_binder_design |
-
-### Additional Structure Files
-- `8r3a.cif` - Additional protein structure for testing
-- `pdl1_simplified.cif` - Standalone structure file
+| File | Description | Use Case |
+|------|-------------|----------|
+| `1g13prot.yaml` | 1G13 protein binder design | Protein-protein interactions |
+| `beetletert.yaml` | BeetleTert peptide design | Peptide drug discovery |
+| `pdl1_simplified.yaml` | PDL1 antibody design | Antibody engineering |
+| `chorismite.yaml` | Small molecule binding | Enzyme design |
+| `penguinpox.yaml` | Nanobody design | Nanobody development |
 
 ---
 
-## Configuration Files
+## Supported Protocols
 
-The `configs/` directory contains configuration templates:
+All tools support the following design protocols:
+- `protein-anything` (default) — General protein binder design
+- `peptide-anything` — Peptide design with cysteine filtering
+- `protein-small_molecule` — Small molecule interactions
+- `nanobody-anything` — Nanobody CDR design
+- `antibody-anything` — Antibody design
 
-| Config | Description | Parameters |
-|--------|-------------|------------|
-| `default_config.json` | Default settings for all tools | `protocol`, `num_designs`, `budget`, `distributed` |
-| `protein_binder_config.json` | Optimized for protein binder design | `protein-anything` protocol settings |
-| `peptide_binder_config.json` | Optimized for peptide design | `peptide-anything` with cysteine filtering |
+## GPU Support
 
-### Config Example
-
-```json
-{
-  "protocol": "protein-anything",
-  "num_designs": 10,
-  "budget": 2,
-  "distributed": {
-    "master_port": 29500
-  },
-  "compute": {
-    "cuda_device": null
-  },
-  "output": {
-    "format": ["cif", "pdb"],
-    "include_metadata": true
-  }
-}
-```
+Docker setup fully supports:
+- Multi-GPU systems (specify device via `cuda:0`, `cuda:1`, etc.)
+- Single GPU setup
+- CPU-only inference (slower, use `cpu` device)
 
 ---
 
 ## Troubleshooting
 
-### Environment Issues
-
-**Problem:** Environment not found
+**Docker not found?**
 ```bash
-# Recreate environment
-mamba create -p ./env python=3.12 -y
-mamba activate ./env
-pip install fastmcp loguru boltzgen
+docker --version  # Install Docker if missing
 ```
 
-**Problem:** BoltzGen command not found
+**GPU not accessible?**
+- Ensure NVIDIA Docker runtime is installed
+- Check with `docker run --gpus all ubuntu nvidia-smi`
+
+**Claude Code not found?**
 ```bash
-# Verify BoltzGen installation
-mamba run -p ./env boltzgen --help
-
-# If missing, reinstall
-pip install --force-reinstall boltzgen
+# Install Claude Code
+npm install -g @anthropic-ai/claude-code
 ```
 
-**Problem:** Import errors
+**Permission issues with output files?**
+The Docker setup automatically runs as your current user. If you still see permission issues:
 ```bash
-# Verify core imports
-python -c "
-import fastmcp, loguru
-from src.server import mcp
-print('All imports working')
-"
-```
-
-### MCP Issues
-
-**Problem:** Server not found in Claude Code
-```bash
-# Check MCP registration
-claude mcp list
-
-# Re-add if needed
-claude mcp remove boltzgen
-claude mcp add boltzgen -- $(pwd)/env/bin/python $(pwd)/src/server.py
-```
-
-**Problem:** Tools not working
-```bash
-# Test server directly
-python -c "
-from src.server import mcp
-tools = list(mcp.list_tools().keys())
-print(f'Available tools: {tools}')
-"
-```
-
-**Problem:** FastMCP issues
-```bash
-# Test FastMCP server manually
-mamba run -p ./env python src/server.py
-# Should start without errors and show "Server ready"
-```
-
-### Job Issues
-
-**Problem:** Job stuck in pending
-```bash
-# Check job directory
-ls -la jobs/
-
-# Check job logs
-ls jobs/*/job.log
-```
-
-**Problem:** Job failed with error
-```
-# In Claude Code:
-Use get_job_log with job_id "<job_id>" and tail 100 to see error details
-```
-
-**Problem:** CUDA errors
-```bash
-# Check GPU availability
-nvidia-smi
-
-# Use CPU if needed
-python scripts/protein_binder_design.py --input config.yaml --output results/ --cuda_device cpu
-```
-
-**Problem:** Port conflicts
-```bash
-# Check if port is in use
-netstat -tulpn | grep 29500
-
-# Use different port
-python scripts/protein_binder_design.py --master_port 29501
-```
-
-### Configuration Issues
-
-**Problem:** "Configuration file not found"
-```bash
-# Check file exists
-ls -la examples/data/1g13prot.yaml
-
-# Use absolute path
-realpath examples/data/1g13prot.yaml
-```
-
-**Problem:** "Missing structure file"
-```
-# This is often shown in job logs. Check the config file references correct .cif files
-Use validate_config to see specific missing files
-```
-
-**Problem:** YAML parsing errors
-```bash
-# Validate YAML syntax
-python -c "
-import yaml
-with open('examples/data/1g13prot.yaml') as f:
-    data = yaml.safe_load(f)
-print('YAML valid')
-"
+# Rebuild with your user ID
+docker build --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) -t boltzgen_mcp:latest .
 ```
 
 ---
 
-## Development
+## Local Setup (Alternative to Docker)
 
-### Running Tests
-
-```bash
-# Activate environment
-mamba activate ./env
-
-# Test server startup
-python -c "from src.server import mcp; print('Server OK')"
-
-# Test job system
-python -c "
-import sys; sys.path.insert(0, 'src')
-from jobs.manager import job_manager
-result = job_manager.list_jobs()
-print(f'Job system: {result[\"status\"]}')
-"
-```
-
-### Starting Dev Server
-
-```bash
-# Run MCP server in development mode
-fastmcp dev src/server.py
-
-# Or run directly
-mamba run -p ./env python src/server.py
-```
-
----
-
-## Performance Notes
-
-### Resource Requirements
-- **Memory**: 8-16 GB RAM for typical designs
-- **GPU**: 7+ GB VRAM recommended (BoltzGen can use CPU but much slower)
-- **Disk**: 1-5 GB per design for temporary and output files
-- **Network**: Ports 29500-29600 for distributed training
-
-### Optimization Tips
-- **Use lower budget**: Set `budget=1` for faster (lower quality) designs
-- **Specify GPU**: Use `cuda_device="0"` to avoid device selection overhead
-- **Batch processing**: More efficient than individual jobs for multiple targets
-- **Monitor with logs**: Use `get_job_log` to track progress and identify bottlenecks
+For development or custom environments, see [details.md](details.md#installation) for:
+- Manual conda environment setup
+- Direct Python script execution
+- Custom configuration options
 
 ---
 
 ## License
 
-This MCP server wraps BoltzGen, which has its own license terms. Please refer to the BoltzGen documentation for licensing information.
-
-## Credits
-
-Based on [BoltzGen](https://github.com/HannesStark/boltzgen) by Hannes Stark et al. for AI-powered protein design.
+Based on the original [BoltzGen](https://github.com/HannesStark/boltzgen) repository by Hannes Stark et al.
 MCP integration built using [FastMCP](https://github.com/jlowin/fastmcp) framework.

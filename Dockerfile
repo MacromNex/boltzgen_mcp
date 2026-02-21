@@ -22,9 +22,13 @@ COPY scripts/ ./scripts/
 RUN mkdir -p tmp/inputs tmp/outputs jobs results
 
 ENV PYTHONPATH=/app
-ENV HF_HOME=/root/.cache
+ENV HF_HOME=/app/.cache
 
 # Pre-download model weights (~6GB) into the final image layer
 RUN boltzgen download all
+
+# Make /app directory readable and writable by all users (for non-root execution)
+RUN chmod -R 755 /app && \
+    chmod -R 777 /app/tmp/inputs /app/tmp/outputs /app/jobs /app/results /app/.cache
 
 CMD ["python", "src/server.py"]
