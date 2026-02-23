@@ -28,14 +28,16 @@ ENV HF_HOME=/app/.cache
 RUN boltzgen download all
 
 # Make /app directory readable and writable by all users (for non-root execution)
-RUN mkdir -p /app/.config/matplotlib && \
+RUN mkdir -p /app/.config/matplotlib /app/.triton && \
     chmod -R 755 /app && \
-    chmod -R 777 /app/tmp/inputs /app/tmp/outputs /app/jobs /app/results /app/.cache /app/.config
+    chmod -R 777 /app/tmp/inputs /app/tmp/outputs /app/jobs /app/results /app/.cache /app/.config /app/.triton
 
 ENV HOME=/app
 ENV MPLCONFIGDIR=/app/.config/matplotlib
 # Prevent torch._dynamo from calling getpass.getuser() which fails for unknown UIDs
 ENV TORCHINDUCTOR_CACHE_DIR=/app/.cache/torch_inductor
+# Triton JIT cache - use /tmp to avoid permission issues with --user flag
+ENV TRITON_HOME=/tmp
 
 # Allow any UID to resolve via NSS (fixes getpwuid KeyError for --user flag)
 RUN chmod 666 /etc/passwd
