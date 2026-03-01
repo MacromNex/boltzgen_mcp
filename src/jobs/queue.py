@@ -594,6 +594,8 @@ class JobQueue:
         env = os.environ.copy()
         env["CUDA_VISIBLE_DEVICES"] = gpu_id
         env["PYTHONUNBUFFERED"] = "1"
+        # Triton JIT cache needs a writable directory
+        env.setdefault("TRITON_HOME", "/tmp")
 
         # Create log file
         log_file = output_dir / "boltzgen_run.log"

@@ -110,6 +110,8 @@ def _run_command(
     if cuda_device is not None:
         run_env["CUDA_VISIBLE_DEVICES"] = cuda_device
     run_env["PYTHONUNBUFFERED"] = "1"
+    # Triton JIT cache needs a writable directory
+    run_env.setdefault("TRITON_HOME", "/tmp")
 
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
