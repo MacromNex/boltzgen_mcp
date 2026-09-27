@@ -1,0 +1,16 @@
+entities:
+  # Target protein for antibody design (using available structure)
+  - file:
+      path: 7rpz.cif
+      include:
+        - chain:
+            id: A
+
+  # Simplified antibody scaffold (de novo design)
+  - protein:
+      id: H  # Heavy chain
+      sequence: 100..120
+
+  - protein:
+      id: L  # Light chain
+      sequence: 90..110
